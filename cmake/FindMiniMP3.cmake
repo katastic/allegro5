@@ -9,7 +9,7 @@ find_path(MINIMP3_INCLUDE_DIRS
     NAMES minimp3.h minimp3_ex.h
 )
 mark_as_advanced(MINIMP3_INCLUDE_DIRS)
-set(MINIMP3_INCLUDE_DIRS "/deps/minimp3")
+set(MINIMP3_INCLUDE_DIRS "../../deps/minimp3")
 
 include(FindPackageHandleStandardArgs)
 set(FPHSA_NAME_MISMATCHED TRUE)
