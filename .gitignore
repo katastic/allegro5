@@ -9,5 +9,3 @@ build_android_mips/
 build_android_x86/
 build_android_x86_64/
 
-# build dependencies optionally go in deps/, ignore them
-deps/
