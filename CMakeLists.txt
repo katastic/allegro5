@@ -5,21 +5,7 @@
 # - some documentation targets still missing
 # - installing documentation
 #
-
-#-----------------------------------------------------------------------------#
-#
-#   Build system setup
-#
-#-----------------------------------------------------------------------------#
-
-# Set the project name.
-# We use C++ in a few cases.
-set(ALLEGRO_PROJECT_SUFFIX "" CACHE STRING "Project suffix")
-set(ALLEGRO_PROJECT_NAME "ALLEGRO" CACHE STRING "Project default name")
-
-project(${ALLEGRO_PROJECT_NAME}${ALLEGRO_PROJECT_SUFFIX} C CXX)
-
-cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.0)
 if(COMMAND cmake_policy)
     cmake_policy(SET CMP0003 NEW)
     if(POLICY CMP0026)
@@ -36,6 +22,45 @@ if(COMMAND cmake_policy)
     endif()
 endif(COMMAND cmake_policy)
 
+
+#-----------------------------------------------------------------------------#
+#
+#   Version
+#
+#-----------------------------------------------------------------------------#
+
+set(ALLEGRO_VERSION_REGEX_PATTERN "#define ALLEGRO_VERSION_STR[ ]+\"([0-9]+\\.[0-9]+\\.[0-9]+).*\"")
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/include/allegro5/base.h" ALLEGRO_VERSION_MATCH
+    REGEX ${ALLEGRO_VERSION_REGEX_PATTERN}
+    LIMIT_COUNT 1
+)
+string(REGEX REPLACE ${ALLEGRO_VERSION_REGEX_PATTERN} "\\1" ALLEGRO_VERSION "${ALLEGRO_VERSION_MATCH}")
+if("${ALLEGRO_VERSION}" VERSION_GREATER_EQUAL 5.0.0)
+    message(STATUS "[Allegro] Allegro Version: [${ALLEGRO_VERSION}]")
+else()
+    message(FATAL_ERROR "[Allegro] Invalid Allegro Version: [${ALLEGRO_VERSION}]")
+endif()
+
+
+#-----------------------------------------------------------------------------#
+#
+#   Project
+#
+#-----------------------------------------------------------------------------#
+
+# Allow generating custom project name via command-line arguments (#1174)
+set(ALLEGRO_PROJECT_NAME "ALLEGRO" CACHE STRING "Project default name")
+set(ALLEGRO_PROJECT_SUFFIX "" CACHE STRING "Project suffix")
+
+project(${ALLEGRO_PROJECT_NAME}${ALLEGRO_PROJECT_SUFFIX}
+    VERSION ${ALLEGRO_VERSION}
+    LANGUAGES C CXX
+    DESCRIPTION "Allegro project"
+    HOMEPAGE_URL "https://github.com/liballeg/allegro5"
+)
+
+set(ALLEGRO_SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
       "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel Profile."
@@ -51,10 +76,6 @@ if(ANDROID)
 endif(ANDROID)
 option(ALLEGRO_SDL "Build using the SDL backend (experimental)" OFF)
 option(WANT_STATIC_RUNTIME "Whether or not to link the C and C++ runtimes statically (currently only implemented on Windows)" OFF)
-
-set(ALLEGRO_VERSION 5.2.9)
-string(REGEX MATCH "^[0-9]+[.][0-9]+" ALLEGRO_SOVERSION ${ALLEGRO_VERSION})
-string(REPLACE "." "" ALLEGRO_DLL_SHORTVER ${ALLEGRO_SOVERSION})
 
 # Search in the `cmake' directory for additional CMake modules.
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -641,17 +662,28 @@ if(WANT_OPENGL)
             set(ALLEGRO_CFG_OPENGL 1)
             set(ALLEGRO_CFG_OPENGLES 1)
             set(ALLEGRO_CFG_OPENGLES2 1)
-            if(WANT_GLES3)
+            set(ALLEGRO_CFG_OPENGL_PROGRAMMABLE_PIPELINE 1)
+            set(OPENGL_LIBRARIES ${OPENGLES2_LIBRARIES})
+            set(OPENGLES_INCLUDE_DIR ${OPENGLES2_INCLUDE_DIR})
+            set(OPENGL_SUMMARY "- OpenGL: ES 2.0")
+
+            if(WANT_GLES3 AND NOT ANDROID)
                 set(SUPPORT_OPENGLES3 1)
                 set(ALLEGRO_CFG_OPENGLES3 1)
                 set(OPENGL_SUMMARY "- OpenGL: ES 3.0")
-            else(WANT_GLES3)
-                set(OPENGL_SUMMARY "- OpenGL: ES 2.0")
-            endif(WANT_GLES3)
-            set(ALLEGRO_CFG_OPENGL_PROGRAMMABLE_PIPELINE 1)
-            set(OPENGL_LIBRARIES "${OPENGLES2_LIBRARIES}")
+            elseif(WANT_GLES3 AND ANDROID)
+                find_package(OpenGLES3)
+                if(OPENGLES3_FOUND)
+                    set(SUPPORT_OPENGLES3 1)
+                    set(ALLEGRO_CFG_OPENGLES3 1)
+                    set(OPENGL_LIBRARIES ${OPENGLES3_LIBRARIES})
+                    list(APPEND OPENGLES_INCLUDE_DIR ${OPENGLES3_INCLUDE_DIR})
+                    set(OPENGL_SUMMARY "- OpenGL: ES 3.0")
+                endif(OPENGLES3_FOUND)
+            endif()
+
             if(NOT IPHONE)
-	        include_directories(SYSTEM ${OPENGLES2_INCLUDE_DIR})
+	        include_directories(SYSTEM ${OPENGLES_INCLUDE_DIR})
             endif()
         else(OPENGLES2_FOUND)
             if(GL_BUILD_TYPE MATCHES "auto")
@@ -1190,6 +1222,44 @@ if(INSTALL_PKG_CONFIG_FILES)
         endforeach(name)
     endforeach(versuffix)
 endif(INSTALL_PKG_CONFIG_FILES)
+
+# Generate CMake package-config files
+include(CMakePackageConfigHelpers)
+
+set(PKG_NAME "Allegro")
+string(TOLOWER ${PKG_NAME} PKG_NAME_LOWER)
+
+set(PKG_CONFIG_INSTALL_DIR "lib/cmake/${PKG_NAME_LOWER}")
+set(PKG_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(PKG_TARGETS_NAME "${PKG_NAME}Targets")
+set(PKG_CONFIG_FILE "${PKG_GENERATED_DIR}/${PKG_NAME}Config.cmake")
+set(PKG_VERSION_FILE "${PKG_GENERATED_DIR}/${PKG_NAME}ConfigVersion.cmake")
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_LIST_DIR}/cmake/${PKG_NAME}Config.cmake.in"
+  ${PKG_CONFIG_FILE}
+  INSTALL_DESTINATION ${PKG_CONFIG_INSTALL_DIR}
+  NO_SET_AND_CHECK_MACRO
+  NO_CHECK_REQUIRED_COMPONENTS_MACRO
+)
+write_basic_package_version_file(${PKG_VERSION_FILE}
+  VERSION ${ALLEGRO_VERSION}
+  COMPATIBILITY AnyNewerVersion
+)
+install(
+  TARGETS ${ALLEGRO_TARGETS}
+  EXPORT ${PKG_TARGETS_NAME}
+)
+install(
+  EXPORT ${PKG_TARGETS_NAME}
+  NAMESPACE ${PKG_NAME}::
+  DESTINATION ${PKG_CONFIG_INSTALL_DIR}
+)
+install(
+  FILES ${PKG_CONFIG_FILE} ${PKG_VERSION_FILE}
+  DESTINATION ${PKG_CONFIG_INSTALL_DIR}
+)
+
 
 #-----------------------------------------------------------------------------#
 #

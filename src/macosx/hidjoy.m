@@ -63,6 +63,7 @@ typedef struct {
    CONFIG_STATE cfg_state;
    ALLEGRO_JOYSTICK_STATE state;
    IOHIDDeviceRef ident;
+   char *name;
 } ALLEGRO_JOYSTICK_OSX;
 
 static IOHIDManagerRef hidManagerRef;
@@ -442,7 +443,7 @@ static void osx_joy_generate_button_event(ALLEGRO_JOYSTICK_OSX *joy, int button,
    _al_event_source_emit_event(es, &event);
 }
 
-#define MAX_HAT_DIRECTIONS 9
+#define MAX_HAT_DIRECTIONS 8
 struct HAT_MAPPING {
    int axisV;
    int axisH;
@@ -455,7 +456,6 @@ struct HAT_MAPPING {
    {  1, -1 }, // 5
    {  0, -1 }, // 6
    { -1, -1 }, // 7
-   {  0,  0 }, // 8
 };
 
 static void value_callback(
@@ -493,11 +493,19 @@ static void value_callback(
    }
 
    int int_value = IOHIDValueGetIntegerValue(value);
+   int min = joy->min[joy->dpad_stick][1];
+   int max = joy->max[joy->dpad_stick][1];
 
    if (joy->dpad == elem){
-      if (int_value >= 0 && int_value < MAX_HAT_DIRECTIONS) {
-         osx_joy_generate_axis_event(joy, joy->dpad_stick, joy->dpad_axis_vert,  (float)hat_mapping[int_value].axisV);
-         osx_joy_generate_axis_event(joy, joy->dpad_stick, joy->dpad_axis_horiz, (float)hat_mapping[int_value].axisH);
+      if (int_value >= min && int_value <= max) {
+         int index = int_value - min;
+         if (index < MAX_HAT_DIRECTIONS) {
+            osx_joy_generate_axis_event(joy, joy->dpad_stick, joy->dpad_axis_vert,  (float)hat_mapping[index].axisV);
+            osx_joy_generate_axis_event(joy, joy->dpad_stick, joy->dpad_axis_horiz, (float)hat_mapping[index].axisH);
+         }
+      } else {
+         osx_joy_generate_axis_event(joy, joy->dpad_stick, joy->dpad_axis_vert,  0);
+         osx_joy_generate_axis_event(joy, joy->dpad_stick, joy->dpad_axis_horiz, 0);
       }
       goto done;
    }
@@ -757,10 +765,25 @@ static bool reconfigure_joysticks(void)
    return ret;
 }
 
-// FIXME!
 static const char *get_joystick_name(ALLEGRO_JOYSTICK *joy_)
 {
-   (void)joy_;
+   ALLEGRO_JOYSTICK_OSX *joy = (ALLEGRO_JOYSTICK_OSX *)joy_;
+   CFStringRef str;
+
+   str = IOHIDDeviceGetProperty(joy->ident, CFSTR(kIOHIDProductKey));
+   if (str) {
+      CFIndex length = CFStringGetLength(str);
+      CFIndex maxSize = CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8) + 1;
+      if (joy->name) {
+         al_free(joy->name);
+      }
+      joy->name = (char *)al_malloc(maxSize);
+      if (joy->name) {
+         if (CFStringGetCString(str, joy->name, maxSize, kCFStringEncodingUTF8)) {
+            return joy->name;
+         }
+      }
+   }
    return "Joystick";
 }
 

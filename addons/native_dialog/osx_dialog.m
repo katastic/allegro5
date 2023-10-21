@@ -186,6 +186,7 @@ int _al_show_native_message_box(ALLEGRO_DISPLAY *display,
       [box setMessageText:[NSString stringWithUTF8String: al_cstr(fd->title)]];
       [box setInformativeText:[NSString stringWithUTF8String: al_cstr(fd->mb_text)]];
       [box setAlertStyle: NSWarningAlertStyle];
+      [[box window] setLevel: NSFloatingWindowLevel];
       for (i = 0; i < [buttons count]; ++i)
          [box addButtonWithTitle: [buttons objectAtIndex: i]];
       
@@ -352,7 +353,7 @@ void _al_append_native_text_log(ALLEGRO_NATIVE_DIALOG *textlog)
         NSString *text = [NSString stringWithUTF8String: al_cstr(textlog->tl_pending_text)];
         [view performSelectorOnMainThread:@selector(appendText:)
                                withObject:text
-                            waitUntilDone:YES];
+                            waitUntilDone:NO];
         
         al_ustr_truncate(textlog->tl_pending_text, 0);
     }

@@ -26,6 +26,7 @@ typedef struct ALLEGRO_DISPLAY_OSX_WIN {
    NSOpenGLContext* ctx;
    NSOpenGLPixelFormatAttribute attributes[AL_OSX_NUM_PFA];
    ALWindow* win;
+   NSView* view;
    NSCursor* cursor;
    CGDirectDisplayID display_id;
    BOOL show_cursor;
@@ -34,11 +35,18 @@ typedef struct ALLEGRO_DISPLAY_OSX_WIN {
    BOOL in_fullscreen;
    BOOL single_buffer;
    CGDisplayModeRef original_mode;
+   BOOL send_halt_events;
+   ALLEGRO_MUTEX *halt_mutex;
+   ALLEGRO_COND *halt_cond;
+   BOOL halt_event_acknowledged;
    /* For new (10.14+) vsyncing. */
    CVDisplayLinkRef display_link;
    ALLEGRO_MUTEX *flip_mutex;
    ALLEGRO_COND *flip_cond;
    int num_flips;
+   /* These two store the old window size when restoring from a FS window. */
+   int old_w;
+   int old_h;
 } ALLEGRO_DISPLAY_OSX_WIN;
 
 /* This is our version of ALLEGRO_MOUSE_CURSOR */
